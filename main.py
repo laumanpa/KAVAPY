@@ -30,6 +30,10 @@ if __name__=="__main__":
     std = aa.rolling_stats(BAZ_new, aa.np.std, window=config.std_window) # rolling standard deviation
     BAZ_new[std > config.std_threshold] = np.nan
     v_app_new[std > config.std_threshold] = np.nan
+    BAZ_new[v_app_new < config.v_app_min] = np.nan
+    BAZ_new[v_app_new > config.v_app_max] = np.nan
+    v_app_new[v_app_new < config.v_app_min] = np.nan
+    v_app_new[v_app_new > config.v_app_max] = np.nan
 
     end_time = time()
 
