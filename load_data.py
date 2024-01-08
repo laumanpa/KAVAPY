@@ -29,6 +29,7 @@ def get_data(folder_path, freqmin, freqmax, param):
 
                 # Append the filtered trace to the stream
                 stream += z_trace
+
     # Extract traces from the stream
     traces = [trace.data for trace in stream]
 
@@ -41,16 +42,19 @@ def get_data(folder_path, freqmin, freqmax, param):
 
     # Sort parameters
     Ind = get_index(param["stations"], stations)
-    param["stations"] = [item for index, item in sorted(zip(Ind, param["stations"])) if not np.isnan(index)]
-    param["xm"] = [item for index, item in sorted(zip(Ind, param["xm"])) if not np.isnan(index)]
-    param["ym"] = [item for index, item in sorted(zip(Ind, param["ym"])) if not np.isnan(index)]
-    param["zm"] = [item for index, item in sorted(zip(Ind, param["zm"])) if not np.isnan(index)]
+
+    param["stations"] = [item for index, item in sorted(zip(Ind, param["stations"]), key=custom_sort) if not np.isnan(index)]
+    param["xm"] = [item for index, item in sorted(zip(Ind, param["xm"]), key=custom_sort) if not np.isnan(index)]
+    param["ym"] = [item for index, item in sorted(zip(Ind, param["ym"]), key=custom_sort) if not np.isnan(index)]
+    param["zm"] = [item for index, item in sorted(zip(Ind, param["zm"]), key=custom_sort) if not np.isnan(index)]
     param["sr"] = stream[0].stats.sampling_rate
 
+    # Find indices of entries in list2 that are missing in list1
+    missing_indices = [stations.index(entry) for entry in stations if entry not in param["stations"]]
+
     # Delete wrong traces
-    for i in range(0,len(Ind)):
-        if np.isnan(Ind[i]):
-            numpy_array = np.delete(numpy_array, i, axis=0)
+    for i in range(0,len(missing_indices)):
+        numpy_array = np.delete(numpy_array, missing_indices[i], axis=0)
 
     # Generate corresponding datetime array
     t = generate_datetime_array(config.date, config.year, np.size(numpy_array,1))
@@ -61,6 +65,11 @@ def get_data(folder_path, freqmin, freqmax, param):
         
     return numpy_array, t, param
 
+
+def custom_sort(item):
+    index, value = item
+    # Use float('inf') for np.nan to ensure it is placed at the end
+    return (float('inf') if np.isnan(index) else index, value)
 
 def get_parameters(folder_program, str_param=None):
     """"
@@ -77,7 +86,6 @@ def get_parameters(folder_program, str_param=None):
         str_param = os.path.join(folder_program, 'Streaming_Parameters', f'{str_param}.txt')
 
     # Read the text file
-    print(str_param)
     with open(str_param, 'r') as fid:
         # Skip the first line
         fid.readline()

@@ -18,6 +18,8 @@ def overview(data, t1, BAZ, v_app, rmse, corr, std, max_amp, sr):
         time array
     BAZ : array
         Array of backazimuth values
+    v_app : array
+        Array of apparent velocities
     rmse : array
         Array of root mean square errors
     corr : array
@@ -37,7 +39,6 @@ def overview(data, t1, BAZ, v_app, rmse, corr, std, max_amp, sr):
     # Calculate sampling rate of backazimuth
     duration = config.duration_minutes*60
     sr2 = len(BAZ)/duration
-    print(sr2)
     # Generate time array for backazimuth
     t2 = generate_datetime_array(config.date, config.year, int(24*60*60*sr2))
     [_, t2] = cut_data(data[:,0:len(t2)], t2, config.start_time, config.duration_minutes, sr2)
@@ -50,7 +51,11 @@ def overview(data, t1, BAZ, v_app, rmse, corr, std, max_amp, sr):
     plt.plot(t1, trace, 'k')
     # Plot backazimuth
     plt.subplot(6,1,2)
-    plt.scatter(t2, np.rad2deg(BAZ), 50, rmse)
+    BAZ2 = np.rad2deg(BAZ)
+    BAZ2[np.isnan(BAZ2)] = 300
+    plt.scatter(t2, BAZ2, 50, rmse)
+    plt.ylim(-180,180)
+    # plt.colorbar()
     plt.ylabel("$\\beta [°]$")
     # Plot spans
     spans, modes = pick_events(BAZ)
@@ -60,11 +65,13 @@ def overview(data, t1, BAZ, v_app, rmse, corr, std, max_amp, sr):
             # Fill the area between -1 and 1 with color
             axes[1].fill_betweenx([-180,180], t2[start], t2[end], alpha=0.3, label='Span Area', color='gray')
             plt.text(t2[start],210,str(int(np.rad2deg(modes[i]))))
-    # Plot Cross correlation
+    # Plot apparent velocity
     plt.subplot(6,1,3)
+    v_app[np.isnan(v_app)] = 50
     plt.scatter(t2, v_app, 50, rmse)
     plt.ylabel("$v_{app} [\\frac{km}{s}]$")
     plt.ylim(0,20)
+    # Plot Cross correlation
     plt.subplot(6,1,4)
     plt.plot(t2, corr, 'k')
     plt.ylabel("Cross Correlation")
@@ -83,8 +90,6 @@ def overview(data, t1, BAZ, v_app, rmse, corr, std, max_amp, sr):
     plt.xlabel("time")
     # Plot a horizontal line at y = 0
     axes[5].axhline(y=config.amp_threshold, color='red', linestyle='--', label='Horizontal Line')
-    
-
     # Set layout
     fig.tight_layout()
     fig.align_ylabels()
@@ -98,5 +103,11 @@ def overview(data, t1, BAZ, v_app, rmse, corr, std, max_amp, sr):
     axes[2].set_xticklabels([]) 
     axes[3].set_xticklabels([]) 
     axes[4].set_xticklabels([]) 
-
+    # Show the plot
     plt.show()
+
+def plot_traces(data, t, v_app, sr):
+    """"
+    Plot all traces normalized in one figure sorted, after their theoretical arrival time with a linear theoretical line representing arrival times for apparent velocity
+    """
+    pass

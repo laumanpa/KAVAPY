@@ -43,8 +43,8 @@ def calc_dist(xm,ym,zm):
     dist_y = np.zeros([len(y),len(y)])
     for i in range(0, len(x)):
         for j in range(0, len(y)):
-            dist_x[j, i] = (x[j]-x[i])/1000
-            dist_y[j, i] = (y[j]-y[i])/1000
+            dist_x[i, j] = (x[i]-x[j])/1000
+            dist_y[i, j] = (y[i]-y[j])/1000
     
     return dist_x, dist_y
 
