@@ -28,7 +28,7 @@ if __name__=="__main__":
     # BAZ_new = BAZ.copy()
     # v_app_new = v_app.copy()
     std = aa.rolling_stats(BAZ_new, np.std, window=config.std_window) # rolling standard deviation
-    std[np.isnan(std)] = 100
+    # std[np.isnan(std)] = 100
     BAZ_new[std > config.std_threshold] = np.nan
     v_app_new[std > config.std_threshold] = np.nan
     BAZ_new[v_app_new < config.v_app_min] = np.nan

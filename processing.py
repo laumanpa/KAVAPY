@@ -2,7 +2,10 @@ import numpy as np
 from sklearn.linear_model import HuberRegressor
 import config
 from multiprocessing import Pool
-import matplotlib.pyplot as plt
+from visualize import plot3d_fit
+from scipy import linalg
+
+
 
 def processing(data, window, dist_x, dist_y, corr_res, sr):
     """"
@@ -77,16 +80,21 @@ def processing_parallel(args):
         A = np.vstack([-dist_x[valid_delays & independent], -dist_y[valid_delays & independent]]).T
 
         # Start Regression
-        mdl = HuberRegressor(epsilon=1).fit(A, tau)
-        rmse = np.sqrt(np.mean((mdl.predict(A) - tau) ** 2))
-        beta = [mdl.coef_[0], mdl.coef_[1]]
+        if config.inversion_method == "Huber":
+            mdl = HuberRegressor(epsilon=1.35).fit(A, tau)
+            rmse = np.sqrt(np.mean((mdl.predict(A) - tau) ** 2))
+            beta = [mdl.coef_[0], mdl.coef_[1]]
+        elif config.inversion_method == "Tikhonov":
+            beta = invert(A, tau, 100, 0.1)
+            rmse = np.sqrt(np.mean(tau - np.dot(A, beta))**2)
+        
         if rmse < config.rmse_threshold:
 
             # Calculate apparent velocity and backazimuth
             v_app = np.sqrt(1.0 / (beta[0] ** 2 + beta[1] ** 2))
             BAZ = np.arctan2(beta[0], beta[1])
-            if config.fit_plot_flag:
-                plot3d_fit(A, tau, mdl, rmse)
+            if config.fit_plot_flag and config.inversion_method == "Huber":
+                plot3d_fit(A, tau, mdl, rmse, BAZ)
             
         else:
             v_app = np.nan
@@ -133,66 +141,23 @@ def cross_corr(A, maxlag, sr):
 
     return delay, c_median
 
+def invert(A, b, k, l):
 
-import numpy as np
-import matplotlib.pyplot as plt
+	u, s, v = linalg.svd(A, full_matrices=False) #compute SVD without 0 singular values
 
-def plot3d_fit(A, tau, mdl, rmse):
-    """
-    Plots a 3D fit of the data.
+	#number of `columns` in the solution s, or length of diagnol
+	
+	S = np.diag(s)
+	sr, sc = S.shape          #dimension of
 
-    Parameters:
-    - A: numpy array, input data
-    - tau: numpy array, target values
-    - mdl: model object, trained model
-    - rmse: numpy array, root mean squared error
+	for i in range(0,sc-1):
+		if S[i,i]>0.00001:
+			S[i,i]=(1/S[i,i]) - (1/S[i,i])*(l/(l+S[i,i]**2))**k
 
-    Returns:
-    None
-    """
-    # Create a new figure and 3D axes
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
+	x1=np.dot(v.transpose(),S)    #why traspose? because svd returns v.transpose() but we need v
+	x2=np.dot(x1,u.transpose())
+	x3=np.dot(x2,b)
 
-    # Predict the target values using the trained model
-    Z = mdl.predict(A)
+	return x3
 
-    # Calculate the root mean squared error
-    rmse = np.sqrt((mdl.predict(A) - tau) ** 2)
 
-    # Scatter plot of the input data and target values
-    ax.scatter(A[:, 0], A[:, 1], tau, c=rmse, marker='o')
-
-    # Create a grid of points for the surface plot
-    xi = np.linspace(np.min(A[:, 0]), np.max(A[:, 0]), 100)
-    yi = np.linspace(np.min(A[:, 1]), np.max(A[:, 1]), 100)
-    X, Y = np.meshgrid(xi, yi)
-
-    # Initialize the Z values for the surface plot
-    Z = np.zeros((len(xi), len(yi)))
-
-    # Calculate the predicted values for each point in the grid
-    for i in range(len(xi)):
-        for j in range(len(yi)):
-            Z[i, j] = mdl.predict(np.array([[xi[i], yi[j]]]))
-
-    # Plot the surface
-    ax.plot_surface(X, Y, Z, alpha=0.2)
-
-    # Set labels for the axes
-    ax.set_xlabel('x [km]')
-    ax.set_ylabel('y [km]')
-    ax.set_zlabel('z [km]')
-    rmse = np.sqrt(np.mean(rmse ** 2))
-    ax.set_title('RMSE = ' + str(round(rmse, 2)) + ' s/km')
-
-    #Number of files in images folder
-    import os
-    i = len([name for name in os.listdir('images') if os.path.isfile(os.path.join('images', name))])
-
-    # Save the figure as an image in folder 'images'
-    plt.savefig('images/3d_fit_' + str(i) + '.png', dpi=600)
-
-    # Close the figure
-    plt.close()
-    
