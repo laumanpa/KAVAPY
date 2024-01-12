@@ -103,7 +103,7 @@ def get_parameters(folder_program, str_param=None):
     # Define variables
     lp, hp, corr_win, corr_res, shift_size = var1
     for i in range(0, num):
-        IP[i], station[i], network[i], channel0[i], location[i], xm[i], ym[i], zm[i] = var2[i*8:(i+1)*8]
+        IP[i], station[i], network[i], channel0[i], location[i], ym[i], xm[i], zm[i] = var2[i*8:(i+1)*8]
     
     nroot = 0
 

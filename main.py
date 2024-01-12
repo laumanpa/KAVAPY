@@ -20,7 +20,7 @@ if __name__=="__main__":
     dist_x, dist_y = aa.calc_dist(param["xm"], param["ym"], param["zm"])
 
     # processing 
-    [median_c, max_d, rmse, v_app, BAZ] = processing(data, config.processing_window, dist_x, dist_y, config.corr_res, param["sr"])
+    [median_c, max_d, rmse, v_app, BAZ] = processing(data, int(config.processing_window_seconds*param["sr"]), dist_x, dist_y, config.corr_res, param["sr"], mode=config.execution_mode)
 
     # Filter BAZ values
     BAZ_new = aa.rolling_stats(BAZ, aa.estimate_mode, window=config.mode_window) # rolling mode estimation

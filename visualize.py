@@ -193,7 +193,7 @@ def plot3d_fit(A, tau, mdl, rmse ,BAZ):
     ax.set_zlabel('z [km]', fontsize=18, labelpad=15)
 
     # Calculate total RMSE and set it as the title of the plot
-    rmse_total = np.sqrt(np.mean(rmse ** 2))
+    rmse_total = np.sqrt(np.mean((tau - mdl.predict(A))**2))
     ax.set_title('RMSE = ' + str(round(rmse_total, 2)) + ' s/km', fontsize=22)
 
     # Set the size of the tick labels
@@ -204,7 +204,7 @@ def plot3d_fit(A, tau, mdl, rmse ,BAZ):
 
     # Plot the actual and predicted values
     ax2.plot(tau, linewidth=2, color='lightseagreen')
-    ax2.plot(mdl.predict(A),linewidth=3, color='darkslategray')
+    ax2.plot(mdl.predict(A), linewidth=3, color='darkslategray')
 
     # Set labels for the axes
     ax2.set_xlabel('Measurement number', fontsize=18)
