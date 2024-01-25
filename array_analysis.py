@@ -4,6 +4,9 @@ from numpy.lib.stride_tricks import sliding_window_view
 import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 from scipy.signal import find_peaks
+import config
+from load_data import generate_datetime_array, cut_data
+import pandas as pd
 
 def geodetic_to_enu(lat, lon, alt, ref_lat, ref_lon, ref_alt):
     """
@@ -46,7 +49,7 @@ def calc_dist(xm,ym,zm):
             dist_x[i, j] = (x[i]-x[j])/1000
             dist_y[i, j] = (y[i]-y[j])/1000
     
-    return dist_x, dist_y
+    return x, y, dist_x, dist_y
 
 
 def max_rolling1(a, window,axis =1):
@@ -206,7 +209,28 @@ def pick_events(BAZ):
 
     return span_indices, BAZ_mode
 
+def write_catalogue(BAZ, v_app):
+    # Calculate sampling rate of backazimuth
+    duration = config.duration_minutes*60
+    sr2 = len(BAZ)/duration
     
+    # Generate time array for backazimuth
+    t2 = generate_datetime_array(config.date, config.year, int(24*60*60*sr2))
+    [_, t2] = cut_data(np.zeros([5,len(t2)]), t2, config.start_time, config.duration_minutes, sr2)
+
+    # Calculate spans
+    spans, modes = pick_events(BAZ)
+
+    catalogue =  pd.DataFrame(columns=['Starttime', 'Endtime', 'BAZ', 'v_app'])
+    
+    # Iterate over the span indices and add spans to catalogue
+    for i, (start, end) in enumerate(spans):
+        if (end - start) > config.min_length:
+            catalogue.loc[i] = [t2[start], t2[end], np.rad2deg(modes[i]), v_app[start]]
+
+    catalogue.to_csv(config.folder_program + '/catalogue_' + config.date + '.csv', index=False)
+
+    return catalogue
 
 
 if __name__=="__main__":

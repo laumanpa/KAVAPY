@@ -5,6 +5,7 @@ from obspy.signal.filter import bandpass
 from datetime import datetime, timedelta
 import config
 import load_data as ld
+import matplotlib.pyplot as plt
 
 def get_data(folder_path, freqmin, freqmax, param):
     # Initialize an empty stream to store the traces
@@ -38,7 +39,6 @@ def get_data(folder_path, freqmin, freqmax, param):
 
     # Extract station names
     stations = [trace.id[1:6] for trace in stream]
-    
 
     # Sort parameters
     Ind = get_index(param["stations"], stations)
@@ -55,12 +55,16 @@ def get_data(folder_path, freqmin, freqmax, param):
     # Delete wrong traces
     for i in range(0,len(missing_indices)):
         numpy_array = np.delete(numpy_array, missing_indices[i], axis=0)
+        stations.pop(missing_indices[i])
 
     # Generate corresponding datetime array
     t = generate_datetime_array(config.date, config.year, np.size(numpy_array,1))
 
     # Cut data according to time interval
     [numpy_array, t] = cut_data(numpy_array,t, config.start_time, config.duration_minutes, param["sr"])
+
+    # Plot stations
+    plot_coordinates_with_station_names(param["xm"], param["ym"], stations, type='lonlat')
 
         
     return numpy_array, t, param
@@ -103,7 +107,7 @@ def get_parameters(folder_program, str_param=None):
     # Define variables
     lp, hp, corr_win, corr_res, shift_size = var1
     for i in range(0, num):
-        IP[i], station[i], network[i], channel0[i], location[i], ym[i], xm[i], zm[i] = var2[i*8:(i+1)*8]
+        IP[i], station[i], network[i], channel0[i], location[i], xm[i], ym[i], zm[i] = var2[i*8:(i+1)*8]
     
     nroot = 0
 
@@ -153,7 +157,7 @@ def generate_datetime_array(start_date_str, year_str, array_length):
     start_date = datetime.strptime(start_date_str + "_" + year_str, "%d_%m_%Y")
 
     # Generate a datetime array with a specified length and duration of one day
-    datetime_array = [start_date + timedelta(days=1/array_length*i) for i in range(array_length)]
+    datetime_array = [start_date + timedelta(days=1/array_length*i) for i in range(array_length+1)]
 
     return datetime_array
 
@@ -166,6 +170,28 @@ def cut_data(d, t, start_time, duration, sr):
     t_cut = t[start_index:end_index]
     return d_cut, t_cut
 
+def plot_coordinates_with_station_names(x, y, name, type='xy'):
+    """
+    Plot the coordinates of the stations with their names
+    Input:
+    - x: numpy array, x coordinates
+    - y: numpy array, y coordinates
+    - name: list, station names
+    - type: str, 'xy' or 'lonlat'
+    """
+    if type == 'xy':
+        x,y = x,y
+    elif type == 'lonlat':
+        x,y = y,x
+
+    plt.figure()
+    plt.scatter(x,y)
+    for i in range(len(x)):
+        plt.text(x[i],y[i],name[i])
+    if type == 'xy':
+        plt.savefig('images/station_coordinates_xy.png', dpi=600)
+    elif type == 'lonlat':
+        plt.savefig('images/station_coordinates_lonlat.png', dpi=600)
 
 if __name__ == "__main__":
     # # Example usage
@@ -187,6 +213,5 @@ if __name__ == "__main__":
     #get_index(list1, list2)
     param = ld.get_parameters(config.folder_program, config.parameter_file)
     [data, t, param] = ld.get_data(config.folder_data, config.freqmin, config.freqmax, param)
-    
     
     

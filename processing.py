@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.linear_model import HuberRegressor
 import config
 from multiprocessing import Pool
-from visualize import plot3d_fit
+from visualize import plot3d_fit, plot_shift
 from scipy import linalg
 import matplotlib.pyplot as plt
 import os
@@ -11,7 +11,7 @@ from scipy import optimize
 
 
 
-def processing(data, window, dist_x, dist_y, corr_res, sr, mode="processing"):
+def processing(data, window, dist_x, dist_y, corr_res, sr, param, mode="processing"):
     """"
     Function for parallel array analysis.
     Input:
@@ -38,12 +38,18 @@ def processing(data, window, dist_x, dist_y, corr_res, sr, mode="processing"):
     rmse = np.zeros(len(step_length))
     median_c = np.zeros(len(step_length))
     max_d = np.zeros(len(step_length))
+
+    # Remove thresholds, if test mode
+    if mode == "testing_inversion" or mode == "testing_all":
+        config.c_median_threshold = 0
+        config.amp_threshold = 0
+        config.rmse_threshold = 1000
     
     # Creating input list for parallel processing function
     if mode == "processing":
-        args_list = [(i,data, window, dist_x, dist_y, step_length, sr, mode) for i in range(0,len(step_length))]
+        args_list = [(i,data, window, dist_x, dist_y, step_length, sr, mode, param) for i in range(0,len(step_length))]
     elif mode == "testing_inversion" or mode == "testing_all":
-        args_list = [(i,data, window, dist_x, dist_y, step_length, sr, mode) for i in range(0,1)]
+        args_list = [(i,data, window, dist_x, dist_y, step_length, sr, mode, param) for i in range(0,1)]
 
     # Parallel processing
     with Pool() as pool:
@@ -63,7 +69,7 @@ def processing_parallel(args):
     """"
     Main parallel processing function
     """
-    i, data, window, dist_x, dist_y, step_length, sr, mode = args
+    i, data, window, dist_x, dist_y, step_length, sr, mode, param = args
 
     # Cut data and time to window size
     d = data[:,step_length[i]:step_length[i]+window]
@@ -87,15 +93,24 @@ def processing_parallel(args):
         # Prepare input arrays for Regression
         delays = -1.0 * c
 
+        #print(delays)
+
         # Create a boolean matrix with the independent entries
-        independent = np.tri(c.shape[0], dtype=bool, k=1)
+        independent = np.tri(c.shape[0], dtype=bool, k=-1)
+
+        #print(independent)
 
         # Create a condition for the non-NaN delays
         valid_delays = ~np.isnan(delays)
 
+        #print(valid_delays)
+
         # Apply the condition to the delays and distances
         tau = delays[valid_delays & independent].T
+        #print(tau)
         A = np.vstack([-dist_x[valid_delays & independent], -dist_y[valid_delays & independent]]).T
+        #print(dist_x)
+        #print(A)
 
         # Start Regression
         if config.inversion_method == "Huber":
@@ -116,11 +131,20 @@ def processing_parallel(args):
             # Calculate apparent velocity and backazimuth
             v_app = np.sqrt(1.0 / (beta[0] ** 2 + beta[1] ** 2))
             BAZ = np.arctan2(beta[1], beta[0])
+            if mode == "processing":
+                BAZ = BAZ - np.pi/2
+            elif mode == mode == "testing_all":
+                BAZ = -BAZ - np.pi/2
+            if BAZ < -np.pi:
+                BAZ = BAZ + 2*np.pi
+            elif BAZ > np.pi:
+                BAZ = BAZ - 2*np.pi
             if mode == "testing_inversion" or mode == "testing_all":
                 print("v_app: " + str(np.round(v_app,2)) + " km/s")
                 print("BAZ: " + str(np.round(np.rad2deg(BAZ),2)) + "°")
             if config.fit_plot_flag:
-                plot3d_fit(A, tau, mdl, rmse, BAZ)
+                plot3d_fit(A, tau, mdl, rmse, BAZ, i)
+                plot_shift(d, delays[0,:], dist_x[0,:], dist_y[0,:], v_app, BAZ, sr, rmse, param["stations"], i)
             
         else:
             v_app = np.nan
@@ -155,11 +179,11 @@ def cross_corr(A, maxlag, sr):
             normalized_corr = cross_corr_result / normalization
 
             # Cut the cross-correlation function at the maximum lag
-            maxlag_samples = int(maxlag * sr)
-            normalized_corr = normalized_corr[len(A[i, :]) - 1 - maxlag_samples:len(A[i, :]) + maxlag_samples]
+            # maxlag_samples = int(maxlag * sr)
+            # normalized_corr = normalized_corr[len(A[i, :]) - 1 - maxlag_samples:len(A[i, :]) + maxlag_samples]
 
             c_max[i, k] = np.max(normalized_corr)
-            c_ind = np.argmax(normalized_corr) - (len(normalized_corr) - 1) / 2
+            c_ind = np.argmax(normalized_corr) - ((len(normalized_corr) - 1) / 2)
             delay[i, k] = c_ind / sr
 
     c_max[c_max == 1] = np.nan
@@ -191,12 +215,14 @@ def generate_sythetic_delay(dist_x, dist_y):
     Function for testing the inversion methods. Generates synthetic delay times.
     """""
     # Generate random backazimuth (-180-180°)
-    BAZ = np.random.uniform(-180, 180)
-
-    # Generate random apparent velocity (0-20 km/s)
-    v_app = np.random.uniform(0, 20)
-
-    print("Generating synthetic data with BAZ = " + str(np.round(BAZ,2)) + " ° and v_app = " + str(np.round(v_app,2)) + " km/s")
+    if config.test_mode == "fixed":
+        BAZ = 90 - config.test_baz
+        v_app = config.test_v_app
+        print("Generating synthetic data with BAZ = " + str(np.round(-BAZ+90,2)) + " ° and v_app = " + str(np.round(v_app,2)) + " km/s")
+    elif config.test_mode == "random":
+        BAZ = np.random.uniform(-180, 180)
+        v_app = np.random.uniform(0, 20)
+        print("Generating synthetic data with BAZ = " + str(np.round(-BAZ+90,2)) + " ° and v_app = " + str(np.round(v_app,2)) + " km/s")
 
     # Calculate distances in BAZ direction
     dist = dist_x * np.cos(np.deg2rad(BAZ)) + dist_y * np.sin(np.deg2rad(BAZ))
@@ -206,12 +232,12 @@ def generate_sythetic_delay(dist_x, dist_y):
 
     return delay, 1
 
-def generate_synthetic_data(delay, sr, window, noise_level=0.2):
+def generate_synthetic_data(delay, sr, window):
     """
     Function for generating synthetic time series, with a given delay time.
     """
     # Calculate number of samples
-    samples = int(window * sr)
+    samples = int(window)
 
     # Preallocate data array
     data = np.zeros((len(delay), samples))
@@ -220,9 +246,9 @@ def generate_synthetic_data(delay, sr, window, noise_level=0.2):
     amp = np.exp(-np.linspace(-25, 25, samples) ** 2)
     
     # Generate synthetic data
-    noise_level = noise_level * np.max(amp)
+    noise_level = config.noise_level * np.max(amp)
     for i in range(len(delay)):
-        data[i,:] = np.roll(amp, int(delay[i, 0] * sr)) + np.random.normal(0, noise_level, samples)
+        data[i,:] = np.roll(amp, int(delay[0,i] * sr)) + np.random.normal(0, noise_level, samples)
 
     return data
 
